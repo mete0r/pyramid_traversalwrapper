@@ -307,6 +307,74 @@ class TestClassAndInstanceDescr(unittest.TestCase):
         self.assertEqual(result, 1)
 
 
+class FunctionalTest(unittest.TestCase):
+    def setUp(self):
+        self.config = testing.setUp()
+
+    def tearDown(self):
+        self.config = testing.tearDown()
+
+    def test_app(self):
+        from pyramid.interfaces import ITraverser
+        from pyramid_traversalwrapper import ModelGraphTraverser
+        from zope.interface import Interface
+
+        self.config.registry.registerAdapter(ModelGraphTraverser,
+                                             (Interface,),
+                                             ITraverser)
+
+        # setup model graph
+        baz = DummyContext()
+        bar = DummyContext(baz)
+        foo = DummyContext(bar)
+        root = DummyContext(foo)
+        self.config.set_root_factory(lambda request: root)
+
+        # setup view
+        def dummy_view(context, request):
+            if context is root:
+                assert context.__name__ is None
+                assert context.__parent__ is None
+            elif context is foo:
+                assert context.__name__ == 'foo'
+                assert context.__parent__ is root
+            elif context is bar:
+                assert context.__name__ == 'bar'
+                assert context.__parent__ is foo
+            elif context is baz:
+                assert context.__name__ == 'baz'
+                assert context.__parent__ is bar
+            return {
+                '__name__': context.__name__,
+                'url': request.resource_url(context),
+            }
+        self.config.add_view(dummy_view, context=DummyContext, renderer='json')
+
+        self.config.commit()
+
+        app = self.config.make_wsgi_app()
+        from webtest import TestApp
+        testapp = TestApp(app)
+
+        resp = testapp.get('/')
+        self.assertEquals({
+            '__name__': None,
+            'url': 'http://localhost/'
+        }, resp.json)
+
+        resp = testapp.get('/foo')
+        self.assertEquals({
+            '__name__': 'foo',
+            'url': 'http://localhost/foo/'
+        }, resp.json)
+
+        resp = testapp.get('/foo/bar')
+        self.assertEquals({
+            '__name__': 'bar',
+            'url': 'http://localhost/foo/bar/'
+        }, resp.json)
+
+
 class DummyContext(object):
     __parent__ = None
     def __init__(self, next=None, name=None):
