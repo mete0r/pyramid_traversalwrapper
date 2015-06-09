@@ -24,7 +24,8 @@ class ModelGraphTraverser(object):
     def __init__(self, root):
         self.root = root
 
-    def __call__(self, environ):
+    def __call__(self, request):
+        environ = request.environ
         if 'bfg.routes.matchdict' in environ:
             matchdict = environ['bfg.routes.matchdict']
             path = matchdict.get('traverse', '/')
