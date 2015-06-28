@@ -48,8 +48,8 @@ class ModelGraphTraverserTests(unittest.TestCase):
 
     def test_call_pathel_with_no_getitem(self):
         policy = self._makeOne(None)
-        environ = self._getEnviron(PATH_INFO='/foo/bar')
-        request = testing.DummyRequest(environ=environ)
+        environ = self._getEnviron()
+        request = testing.DummyRequest(environ=environ, path_info='/foo/bar')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], None)
@@ -63,8 +63,8 @@ class ModelGraphTraverserTests(unittest.TestCase):
     def test_call_withconn_getitem_emptypath_nosubpath(self):
         root = DummyContext()
         policy = self._makeOne(root)
-        environ = self._getEnviron(PATH_INFO='')
-        request = testing.DummyRequest(environ=environ)
+        environ = self._getEnviron()
+        request = testing.DummyRequest(environ=environ, path_info='')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], root)
@@ -79,8 +79,8 @@ class ModelGraphTraverserTests(unittest.TestCase):
         foo = DummyContext()
         root = DummyContext(foo)
         policy = self._makeOne(root)
-        environ = self._getEnviron(PATH_INFO='/foo/bar')
-        request = testing.DummyRequest(environ=environ)
+        environ = self._getEnviron()
+        request = testing.DummyRequest(environ=environ, path_info='/foo/bar')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], foo)
@@ -95,8 +95,9 @@ class ModelGraphTraverserTests(unittest.TestCase):
         foo = DummyContext()
         root = DummyContext(foo)
         policy = self._makeOne(root)
-        environ = self._getEnviron(PATH_INFO='/foo/bar/baz/buz')
-        request = testing.DummyRequest(environ=environ)
+        environ = self._getEnviron()
+        request = testing.DummyRequest(environ=environ,
+                                       path_info='/foo/bar/baz/buz')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], foo)
@@ -111,8 +112,8 @@ class ModelGraphTraverserTests(unittest.TestCase):
         foo = DummyContext()
         root = DummyContext(foo)
         policy = self._makeOne(root)
-        environ = self._getEnviron(PATH_INFO='/@@foo')
-        request = testing.DummyRequest(environ=environ)
+        environ = self._getEnviron()
+        request = testing.DummyRequest(environ=environ, path_info='/@@foo')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], root)
@@ -124,14 +125,13 @@ class ModelGraphTraverserTests(unittest.TestCase):
         self.assertEqual(result['virtual_root_path'], ())
 
     def test_call_with_vh_root(self):
-        environ = self._getEnviron(PATH_INFO='/baz',
-                                   HTTP_X_VHM_ROOT='/foo/bar')
+        environ = self._getEnviron(HTTP_X_VHM_ROOT='/foo/bar')
         baz = DummyContext(None, 'baz')
         bar = DummyContext(baz, 'bar')
         foo = DummyContext(bar, 'foo')
         root = DummyContext(foo, 'root')
         policy = self._makeOne(root)
-        request = testing.DummyRequest(environ=environ)
+        request = testing.DummyRequest(environ=environ, path_info='/baz')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
@@ -143,14 +143,13 @@ class ModelGraphTraverserTests(unittest.TestCase):
         self.assertEqual(result['virtual_root_path'], (u'foo', u'bar'))
 
     def test_call_with_vh_root2(self):
-        environ = self._getEnviron(PATH_INFO='/bar/baz',
-                                   HTTP_X_VHM_ROOT='/foo')
+        environ = self._getEnviron(HTTP_X_VHM_ROOT='/foo')
         baz = DummyContext(None, 'baz')
         bar = DummyContext(baz, 'bar')
         foo = DummyContext(bar, 'foo')
         root = DummyContext(foo, 'root')
         policy = self._makeOne(root)
-        request = testing.DummyRequest(environ=environ)
+        request = testing.DummyRequest(environ=environ, path_info='/bar/baz')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
@@ -162,14 +161,14 @@ class ModelGraphTraverserTests(unittest.TestCase):
         self.assertEqual(result['virtual_root_path'], (u'foo',))
 
     def test_call_with_vh_root3(self):
-        environ = self._getEnviron(PATH_INFO='/foo/bar/baz',
-                                   HTTP_X_VHM_ROOT='/')
+        environ = self._getEnviron(HTTP_X_VHM_ROOT='/')
         baz = DummyContext()
         bar = DummyContext(baz)
         foo = DummyContext(bar)
         root = DummyContext(foo)
         policy = self._makeOne(root)
-        request = testing.DummyRequest(environ=environ)
+        request = testing.DummyRequest(environ=environ,
+                                       path_info='/foo/bar/baz')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
@@ -181,14 +180,13 @@ class ModelGraphTraverserTests(unittest.TestCase):
         self.assertEqual(result['virtual_root_path'], ())
 
     def test_call_with_vh_root4(self):
-        environ = self._getEnviron(PATH_INFO='/',
-                                   HTTP_X_VHM_ROOT='/foo/bar/baz')
+        environ = self._getEnviron(HTTP_X_VHM_ROOT='/foo/bar/baz')
         baz = DummyContext(None, 'baz')
         bar = DummyContext(baz, 'bar')
         foo = DummyContext(bar, 'foo')
         root = DummyContext(foo, 'root')
         policy = self._makeOne(root)
-        request = testing.DummyRequest(environ=environ)
+        request = testing.DummyRequest(environ=environ, path_info='/')
         request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
@@ -198,28 +196,6 @@ class ModelGraphTraverserTests(unittest.TestCase):
         self.assertEqual(result['root'], root)
         self.assertEqual(result['virtual_root'], baz)
         self.assertEqual(result['virtual_root_path'], (u'foo', u'bar', u'baz'))
-
-    def test_non_utf8_path_segment_unicode_path_segments_fails(self):
-        from pyramid.exceptions import URLDecodeError 
-        foo = DummyContext()
-        root = DummyContext(foo)
-        policy = self._makeOne(root)
-        segment = unicode('LaPe\xc3\xb1a', 'utf-8').encode('utf-16')
-        environ = self._getEnviron(PATH_INFO='/%s' % segment)
-        request = testing.DummyRequest(environ=environ)
-        request.matchdict = None
-        self.assertRaises(URLDecodeError, policy, request)
-
-    def test_non_utf8_path_segment_settings_unicode_path_segments_fails(self):
-        from pyramid.exceptions import URLDecodeError
-        foo = DummyContext()
-        root = DummyContext(foo)
-        policy = self._makeOne(root)
-        segment = unicode('LaPe\xc3\xb1a', 'utf-8').encode('utf-16')
-        environ = self._getEnviron(PATH_INFO='/%s' % segment)
-        request = testing.DummyRequest(environ=environ)
-        request.matchdict = None
-        self.assertRaises(URLDecodeError, policy, request)
 
     def test_withroute_nothingfancy(self):
         model = DummyContext()
@@ -273,8 +249,9 @@ class ModelGraphTraverserTests(unittest.TestCase):
         root = DummyContext(foo)
         from zope.proxy import isProxy
         policy = self._makeOne(root)
-        environ = self._getEnviron(PATH_INFO='/foo/bar/baz')
-        request = testing.DummyRequest(environ=environ)
+        environ = self._getEnviron()
+        request = testing.DummyRequest(environ=environ,
+                                       path_info='/foo/bar/baz')
         request.matchdict = None
         result = policy(request)
         ctx, name, subpath, traversed, vroot, vroot_path = (

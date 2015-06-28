@@ -5,14 +5,22 @@ from zope.interface import implements
 from zope.proxy import ProxyBase, getProxiedObject, non_overridable
 from zope.proxy.decorator import DecoratorSpecificationDescriptor
 
+from pyramid.compat import decode_path_info
+from pyramid.compat import is_nonstr_iter
+from pyramid.compat import text_
+
+from pyramid.exceptions import URLDecodeError
+
 from pyramid.interfaces import ILocation
 from pyramid.interfaces import ITraverser
 from pyramid.interfaces import ITraverserFactory
 from pyramid.interfaces import VH_ROOT_KEY
 
-from pyramid.traversal import traversal_path
+from pyramid.traversal import split_path_info
 
 _marker = object()
+empty = text_('')
+slash = text_('/')
 
 class ModelGraphTraverser(object):
     """ A model graph traverser that should be used (for convenience)
@@ -21,6 +29,9 @@ class ModelGraphTraverser(object):
     interface') ."""
     classProvides(ITraverserFactory)
     implements(ITraverser)
+
+    VIEW_SELECTOR = '@@'
+
     def __init__(self, root):
         self.root = root
 
@@ -30,31 +41,47 @@ class ModelGraphTraverser(object):
 
         if matchdict is not None:
 
-            path = matchdict.get('traverse', '/')
-            subpath = matchdict.get('subpath', '')
-            subpath = tuple(filter(None, subpath.split('/')))
+            path = matchdict.get('traverse', slash) or slash
+            if is_nonstr_iter(path):
+                # this is a *traverse stararg (not a {traverse})
+                # routing has already decoded these elements, so we just
+                # need to join them
+                path = '/' + slash.join(path) or slash
+
+            subpath = matchdict.get('subpath', ())
+            if not is_nonstr_iter(subpath):
+                # this is not a *subpath stararg (just a {subpath})
+                # routing has already decoded this string, so we just need
+                # to split it
+                subpath = split_path_info(subpath)
+
         else:
-            # this request did not match a Routes route
+            # this request did not match a route
             subpath = ()
             try:
-                path = environ['PATH_INFO'] or '/'
+                # empty if mounted under a path in mod_wsgi, for example
+                path = request.path_info or slash
             except KeyError:
-                path = '/'
+                # if environ['PATH_INFO'] is just not there
+                path = slash
+            except UnicodeDecodeError as e:
+                raise URLDecodeError(e.encoding, e.object, e.start, e.end,
+                                     e.reason)
 
-        try:
-            vroot_path = environ[VH_ROOT_KEY]
-        except KeyError:
+        if VH_ROOT_KEY in environ:
+            # HTTP_X_VHM_ROOT
+            vroot_path = decode_path_info(environ[VH_ROOT_KEY]) 
+            vroot_tuple = split_path_info(vroot_path)
+            vpath = vroot_path + path # both will (must) be unicode or asciistr
+            vroot_idx = len(vroot_tuple) -1
+        else:
             vroot_tuple = ()
             vpath = path
             vroot_idx = -1
-        else:
-            vroot_tuple = traversal_path(vroot_path)
-            vpath = vroot_path + path
-            vroot_idx = len(vroot_tuple) -1
 
-        ob = vroot = LocationProxy(self.root)
+        ob = vroot = root = LocationProxy(self.root)
 
-        if vpath == '/' or (not vpath):
+        if vpath == slash: # invariant: vpath must not be empty
             # prevent a call to traversal_path if we know it's going
             # to return the empty tuple
             vpath_tuple = ()
@@ -63,43 +90,47 @@ class ModelGraphTraverser(object):
             # pushing and popping temporary lists for speed purposes
             # and this hurts readability; apologies
             i = 0
-            vpath_tuple = traversal_path(vpath)
+            view_selector = self.VIEW_SELECTOR
+            vpath_tuple = split_path_info(vpath)
             for segment in vpath_tuple:
-                if segment[:2] =='@@':
-                    return dict(context=ob, view_name=segment[2:],
-                                subpath=vpath_tuple[i+1:],
-                                traversed=vpath_tuple[:vroot_idx+i+1],
-                                virtual_root=vroot,
-                                virtual_root_path=vroot_tuple,
-                                root=self.root)
+                if segment[:2] == view_selector:
+                    return {'context':ob,
+                            'view_name':segment[2:],
+                            'subpath':vpath_tuple[i+1:],
+                            'traversed':vpath_tuple[:vroot_idx+i+1],
+                            'virtual_root':vroot,
+                            'virtual_root_path':vroot_tuple,
+                            'root':root}
                 try:
                     getitem = ob.__getitem__
                 except AttributeError:
-                    return dict(context=ob, view_name=segment,
-                                subpath=vpath_tuple[i+1:],
-                                traversed=vpath_tuple[:vroot_idx+i+1],
-                                virtual_root=vroot,
-                                virtual_root_path=vroot_tuple,
-                                root=self.root)
+                    return {'context':ob,
+                            'view_name':segment,
+                            'subpath':vpath_tuple[i+1:],
+                            'traversed':vpath_tuple[:vroot_idx+i+1],
+                            'virtual_root':vroot,
+                            'virtual_root_path':vroot_tuple,
+                            'root':root}
 
                 try:
                     next = getitem(segment)
                 except KeyError:
-                    return dict(context=ob, view_name=segment,
-                                subpath=vpath_tuple[i+1:],
-                                traversed=vpath_tuple[:vroot_idx+i+1],
-                                virtual_root=vroot,
-                                virtual_root_path=vroot_tuple,
-                                root=self.root)
+                    return {'context':ob,
+                            'view_name':segment,
+                            'subpath':vpath_tuple[i+1:],
+                            'traversed':vpath_tuple[:vroot_idx+i+1],
+                            'virtual_root':vroot,
+                            'virtual_root_path':vroot_tuple,
+                            'root':root}
                 next = LocationProxy(next, ob, segment)
                 if i == vroot_idx: 
                     vroot = next
                 ob = next
                 i += 1
 
-        return dict(context=ob, view_name=u'', subpath=subpath,
-                    traversed=vpath_tuple, virtual_root=vroot,
-                    virtual_root_path=vroot_tuple, root=self.root)
+        return {'context':ob, 'view_name':empty, 'subpath':subpath,
+                'traversed':vpath_tuple, 'virtual_root':vroot,
+                'virtual_root_path':vroot_tuple, 'root':root}
 
 class ClassAndInstanceDescr(object):
 
