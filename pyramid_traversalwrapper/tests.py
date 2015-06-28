@@ -36,6 +36,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         policy = self._makeOne(None)
         environ = self._getEnviron()
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], None)
         self.assertEqual(result['view_name'], '')
@@ -49,6 +50,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         policy = self._makeOne(None)
         environ = self._getEnviron(PATH_INFO='/foo/bar')
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], None)
         self.assertEqual(result['view_name'], 'foo')
@@ -63,6 +65,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         policy = self._makeOne(root)
         environ = self._getEnviron(PATH_INFO='')
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], root)
         self.assertEqual(result['view_name'], '')
@@ -78,6 +81,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         policy = self._makeOne(root)
         environ = self._getEnviron(PATH_INFO='/foo/bar')
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], foo)
         self.assertEqual(result['view_name'], 'bar')
@@ -93,6 +97,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         policy = self._makeOne(root)
         environ = self._getEnviron(PATH_INFO='/foo/bar/baz/buz')
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], foo)
         self.assertEqual(result['view_name'], 'bar')
@@ -108,6 +113,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         policy = self._makeOne(root)
         environ = self._getEnviron(PATH_INFO='/@@foo')
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], root)
         self.assertEqual(result['view_name'], 'foo')
@@ -126,6 +132,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         root = DummyContext(foo, 'root')
         policy = self._makeOne(root)
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
         self.assertEqual(result['view_name'], '')
@@ -144,6 +151,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         root = DummyContext(foo, 'root')
         policy = self._makeOne(root)
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
         self.assertEqual(result['view_name'], '')
@@ -162,6 +170,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         root = DummyContext(foo)
         policy = self._makeOne(root)
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
         self.assertEqual(result['view_name'], '')
@@ -180,6 +189,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         root = DummyContext(foo, 'root')
         policy = self._makeOne(root)
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         self.assertEqual(result['context'], baz)
         self.assertEqual(result['view_name'], '')
@@ -197,6 +207,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         segment = unicode('LaPe\xc3\xb1a', 'utf-8').encode('utf-16')
         environ = self._getEnviron(PATH_INFO='/%s' % segment)
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         self.assertRaises(URLDecodeError, policy, request)
 
     def test_non_utf8_path_segment_settings_unicode_path_segments_fails(self):
@@ -207,13 +218,15 @@ class ModelGraphTraverserTests(unittest.TestCase):
         segment = unicode('LaPe\xc3\xb1a', 'utf-8').encode('utf-16')
         environ = self._getEnviron(PATH_INFO='/%s' % segment)
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         self.assertRaises(URLDecodeError, policy, request)
 
     def test_withroute_nothingfancy(self):
         model = DummyContext()
         traverser = self._makeOne(model)
-        environ = {'bfg.routes.matchdict': {}}
+        environ = self._getEnviron()
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = {}
         result = traverser(request)
         self.assertEqual(result['context'], model)
         self.assertEqual(result['view_name'], '')
@@ -226,8 +239,9 @@ class ModelGraphTraverserTests(unittest.TestCase):
     def test_withroute_with_subpath(self):
         model = DummyContext()
         traverser = self._makeOne(model)
-        environ = {'bfg.routes.matchdict': {'subpath':'/a/b/c'}}
+        environ = self._getEnviron()
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = {'subpath': '/a/b/c'}
         result = traverser(request)
         self.assertEqual(result['context'], model)
         self.assertEqual(result['view_name'], '')
@@ -240,8 +254,9 @@ class ModelGraphTraverserTests(unittest.TestCase):
     def test_withroute_and_traverse(self):
         model = DummyContext()
         traverser = self._makeOne(model)
-        environ = {'bfg.routes.matchdict': {'traverse':'foo/bar'}}
+        environ = self._getEnviron()
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = {'traverse': 'foo/bar'}
         result = traverser(request)
         self.assertEqual(result['context'], model)
         self.assertEqual(result['view_name'], 'foo')
@@ -260,6 +275,7 @@ class ModelGraphTraverserTests(unittest.TestCase):
         policy = self._makeOne(root)
         environ = self._getEnviron(PATH_INFO='/foo/bar/baz')
         request = testing.DummyRequest(environ=environ)
+        request.matchdict = None
         result = policy(request)
         ctx, name, subpath, traversed, vroot, vroot_path = (
             result['context'], result['view_name'], result['subpath'],

@@ -26,8 +26,10 @@ class ModelGraphTraverser(object):
 
     def __call__(self, request):
         environ = request.environ
-        if 'bfg.routes.matchdict' in environ:
-            matchdict = environ['bfg.routes.matchdict']
+        matchdict = request.matchdict
+
+        if matchdict is not None:
+
             path = matchdict.get('traverse', '/')
             subpath = matchdict.get('subpath', '')
             subpath = tuple(filter(None, subpath.split('/')))
